@@ -1,6 +1,64 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http; // IMPORT REQUIS
+import 'dart:convert'; // IMPORT REQUIS
 
-class ExplorerPage extends StatelessWidget {
+class ExplorerPage extends StatefulWidget {
+  const ExplorerPage({super.key});
+
+  @override
+  State<ExplorerPage> createState() => _ExplorerPageState();
+}
+
+class _ExplorerPageState extends State<ExplorerPage> {
+  List<dynamic> _courses = [];
+  bool _isLoading = true;
+  String _messageErreur = "";
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Récupération des données du profil passées en argument depuis la navigation
+    final Map<String, dynamic>? profil =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    if (profil != null && profil['id'] != null) {
+      _chargerHistoriqueCourses(profil['id']);
+    } else {
+      setState(() {
+        _isLoading = false;
+        _messageErreur = "Impossible de récupérer vos identifiants.";
+      });
+    }
+  }
+
+  // APPEL RÉEL VERS L'API BACKEND
+  Future<void> _chargerHistoriqueCourses(int idUtilisateur) async {
+    final String urlApi =
+        "http://10.0.2.2:3000/api/courses/historique/client/$idUtilisateur";
+
+    try {
+      final response = await http.get(Uri.parse(urlApi));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _courses = data['courses'] ?? [];
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _messageErreur = "Erreur lors du chargement de l'historique.";
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messageErreur = "Impossible de joindre le serveur.";
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -15,7 +73,7 @@ class ExplorerPage extends StatelessWidget {
                   _backButton(context),
                   const SizedBox(width: 20),
                   const Text(
-                    "Où allons-nous ?",
+                    "Historique des courses",
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 24,
@@ -28,57 +86,44 @@ class ExplorerPage extends StatelessWidget {
             _buildItineraryInputs(),
             const SizedBox(height: 20),
             _buildQuickFilters(),
+
+            // AFFICHAGE DYNAMIQUE DE L'HISTORIQUE DE LA BASE DE DONNÉES
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  const SizedBox(height: 20),
-                  const Text(
-                    "RECENTS",
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF7B61FF),
+                      ),
+                    )
+                  : _messageErreur.isNotEmpty
+                  ? Center(
+                      child: Text(
+                        _messageErreur,
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
+                    )
+                  : _courses.isEmpty
+                  ? const Center(
+                      child: Text(
+                        "Aucune course enregistrée pour le moment.",
+                        style: TextStyle(color: Colors.white38),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: _courses.length,
+                      itemBuilder: (context, index) {
+                        final course = _courses[index];
+                        return _recentTile(
+                          course['depart'] ?? "Départ inconnu",
+                          course['arrivee'] ?? "Arrivée inconnue",
+                          course['prix'] != null
+                              ? "${course['prix']} FCFA"
+                              : "Prix non fixé",
+                          course['statut'] ?? "en_attente",
+                        );
+                      },
                     ),
-                  ),
-                  _recentTile(
-                    "Marché Sandaga",
-                    "Plateau, Dakar",
-                    "1.2 km",
-                    Icons.access_time,
-                  ),
-                  _recentTile(
-                    "Hôpital Principal",
-                    "Rue Calmette, Dakar",
-                    "3.4 km",
-                    Icons.location_on,
-                  ),
-                  _recentTile(
-                    "Aéroport AIBD",
-                    "Diass, 45 km",
-                    "45 km",
-                    Icons.directions_bus,
-                    isHighlight: true,
-                  ),
-                  _recentTile(
-                    "Villa Almadies",
-                    "Almadies, Dakar",
-                    "8.1 km",
-                    Icons.home,
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "SUGGESTIONS",
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  _suggestionTile("Point E, Dakar"),
-                  _suggestionTile("Université Cheikh Anta Diop"),
-                ],
-              ),
             ),
           ],
         ),
@@ -191,22 +236,37 @@ class ExplorerPage extends StatelessWidget {
     );
   }
 
+  // Tuile adaptative selon le statut réel provenant de la BDD
   Widget _recentTile(
-    String title,
-    String sub,
-    String dist,
-    IconData icon, {
-    bool isHighlight = false,
-  }) {
+    String depart,
+    String arrivee,
+    String prix,
+    String statut,
+  ) {
+    IconData iconeStatut;
+    Color couleurStatut;
+
+    switch (statut) {
+      case 'terminee':
+        iconeStatut = Icons.check_circle_outline;
+        couleurStatut = Colors.greenAccent;
+        break;
+      case 'annulee':
+        iconeStatut = Icons.cancel_outlined;
+        couleurStatut = Colors.redAccent;
+        break;
+      default:
+        iconeStatut = Icons.access_time;
+        couleurStatut = Colors.orangeAccent;
+    }
+
     return Container(
       margin: const EdgeInsets.only(top: 15),
-      padding: isHighlight ? const EdgeInsets.all(15) : EdgeInsets.zero,
-      decoration: isHighlight
-          ? BoxDecoration(
-              color: const Color(0xFF16192B),
-              borderRadius: BorderRadius.circular(15),
-            )
-          : null,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16192B),
+        borderRadius: BorderRadius.circular(15),
+      ),
       child: Row(
         children: [
           Container(
@@ -215,11 +275,7 @@ class ExplorerPage extends StatelessWidget {
               color: const Color(0xFF1F2235),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              icon,
-              color: isHighlight ? Colors.orange : Colors.white38,
-              size: 20,
-            ),
+            child: Icon(iconeStatut, color: couleurStatut, size: 20),
           ),
           const SizedBox(width: 15),
           Expanded(
@@ -227,42 +283,29 @@ class ExplorerPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  arrivee,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  sub,
+                  "De : $depart",
                   style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
           Text(
-            dist,
-            style: const TextStyle(color: Colors.blueAccent, fontSize: 12),
+            prix,
+            style: const TextStyle(
+              color: Colors.blueAccent,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _suggestionTile(String text) {
-    return Container(
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: const Color(0xFF16192B).withOpacity(0.5),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search, color: Colors.white38, size: 18),
-          const SizedBox(width: 15),
-          Text(text, style: const TextStyle(color: Colors.white70)),
         ],
       ),
     );

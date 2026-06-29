@@ -1,7 +1,63 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http; // IMPORT REQUIS
+import 'dart:convert'; // IMPORT REQUIS
 
-class HistoriquePage extends StatelessWidget {
+class HistoriquePage extends StatefulWidget {
   const HistoriquePage({super.key});
+
+  @override
+  State<HistoriquePage> createState() => _HistoriquePageState();
+}
+
+class _HistoriquePageState extends State<HistoriquePage> {
+  List<dynamic> _courses = [];
+  bool _isLoading = true;
+  String _messageErreur = "";
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Récupération des données du profil passées en argument depuis la navigation
+    final Map<String, dynamic>? profil =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    if (profil != null && profil['id'] != null) {
+      _chargerHistoriqueCourses(profil['id']);
+    } else {
+      setState(() {
+        _isLoading = false;
+        _messageErreur = "Impossible de charger les données de l'utilisateur.";
+      });
+    }
+  }
+
+  // APPEL RÉEL AU BACKEND NODE.JS
+  Future<void> _chargerHistoriqueCourses(int idUtilisateur) async {
+    final String urlApi =
+        "http://10.0.2.2:3000/api/courses/historique/client/$idUtilisateur";
+
+    try {
+      final response = await http.get(Uri.parse(urlApi));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _courses = data['courses'] ?? [];
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _messageErreur = "Erreur lors du chargement de l'historique.";
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messageErreur = "Impossible de joindre le serveur backend.";
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,9 +81,10 @@ class HistoriquePage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 10),
-            const Text(
-              "47 TRAJETS EFFECTUÉS",
-              style: TextStyle(
+            // LE COMPTEUR DEVIENT ENTIÈREMENT DYNAMIQUE BASE DE DONNÉES !
+            Text(
+              "${_courses.length} ${(_courses.length > 1) ? 'TRAJETS EFFECTUÉS' : 'TRAJET EFFECTUÉ'}",
+              style: const TextStyle(
                 color: Colors.white38,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
@@ -35,36 +92,61 @@ class HistoriquePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
+
+            // GESTION DU CHARGEMENT, DE L'ERREUR OU DE LA LISTE VIDE
             Expanded(
-              child: ListView(
-                children: [
-                  _buildHistoryItem(
-                    "Aujourd'hui, 14:30",
-                    "Marché Sandaga",
-                    "1 200 F",
-                    "Terminé",
-                  ),
-                  _buildHistoryItem(
-                    "Hier, 08:15",
-                    "Hôpital Principal",
-                    "2 500 F",
-                    "Terminé",
-                  ),
-                  _buildHistoryItem(
-                    "03 Mai, 19:00",
-                    "Aéroport AIBD",
-                    "15 000 F",
-                    "Terminé",
-                  ),
-                  _buildHistoryItem(
-                    "02 Mai, 12:45",
-                    "Villa Almadies",
-                    "3 200 F",
-                    "Annulé",
-                    isCancelled: true,
-                  ),
-                ],
-              ),
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF7B61FF),
+                      ),
+                    )
+                  : _messageErreur.isNotEmpty
+                  ? Center(
+                      child: Text(
+                        _messageErreur,
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
+                    )
+                  : _courses.isEmpty
+                  ? const Center(
+                      child: Text(
+                        "Aucun trajet enregistré pour le moment.",
+                        style: TextStyle(color: Colors.white38, fontSize: 16),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _courses.length,
+                      itemBuilder: (context, index) {
+                        final course = _courses[index];
+
+                        // Formatage rapide de la date mysql en String lisible
+                        String dateCourse =
+                            course['date_course'] ?? "Date inconnue";
+                        if (dateCourse.length > 10) {
+                          dateCourse = dateCourse.substring(
+                            0,
+                            10,
+                          ); // Extrait 'YYYY-MM-DD'
+                        }
+
+                        bool estAnnule = (course['statut'] == 'annulee');
+                        String statutAffiche = "Terminé";
+                        if (course['statut'] == 'en_attente')
+                          statutAffiche = "En attente";
+                        if (estAnnule) statutAffiche = "Annulé";
+
+                        return _buildHistoryItem(
+                          dateCourse,
+                          course['arrivee'] ?? "Destination",
+                          course['prix'] != null
+                              ? "${course['prix']} F"
+                              : "0 F",
+                          statutAffiche,
+                          isCancelled: estAnnule,
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -115,6 +197,8 @@ class HistoriquePage extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   date,

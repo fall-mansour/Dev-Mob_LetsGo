@@ -4,7 +4,9 @@ import 'Pages/acceuil.dart';
 import 'Pages/explorer.dart';
 import 'Pages/trajet.dart';
 import 'Pages/profil.dart';
-import 'Pages/historique.dart'; // Import de la page historique
+import 'Pages/historique.dart';
+import 'Pages/connexion.dart'; // Importation de la page de Connexion
+import 'Pages/compte.dart'; // Importation de la page d'Inscription
 
 void main() {
   runApp(const MyApp());
@@ -28,10 +30,17 @@ class MyApp extends StatelessWidget {
         fontFamily: 'DM Sans',
         useMaterial3: true,
       ),
-      home: const MainNavigationContainer(),
+
+      // 1. L'application démarre désormais DIRECTEMENT sur la ConnexionPage
+      home: const ConnexionPage(),
+
+      // 2. Définition des routes pour naviguer d'un écran à un autre
       routes: {
+        '/accueil': (context) => const MainNavigationContainer(),
         '/explorer': (context) => ExplorerPage(),
         '/historique': (context) => const HistoriquePage(),
+        '/inscription': (context) => const InscriptionPage(),
+        '/connexion': (context) => const ConnexionPage(),
       },
     );
   }
@@ -48,12 +57,12 @@ class MainNavigationContainer extends StatefulWidget {
 class _MainNavigationContainerState extends State<MainNavigationContainer> {
   int _selectedIndex = 0;
 
-  // Liste des pages mise à jour
+  // Liste des pages de l'IndexedStack (Conserve l'état de ta carte)
   final List<Widget> _pages = [
-    AccueilPage(), // Index 0 : Icône Accueil
+    const AccueilPage(), // Index 0 : Icône Accueil
     ExplorerPage(), // Index 1 : Icône Loupe
     TrajetPage(), // Index 2 : Bouton Central (Position)
-    const HistoriquePage(), // Index 3 : Icône Trajets (Document) -> TON HISTORIQUE
+    const HistoriquePage(), // Index 3 : Icône Trajets (Document)
     ProfilPage(), // Index 4 : Icône Profil
   ];
 
@@ -66,7 +75,6 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // IndexedStack permet de ne pas recharger les pages (conserve l'état de la carte)
       body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
@@ -97,7 +105,6 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
               activeIcon: Icon(Icons.search_rounded),
               label: 'Explorer',
             ),
-            // Bouton Central "Position"
             BottomNavigationBarItem(
               icon: Container(
                 padding: const EdgeInsets.all(10),
@@ -110,7 +117,6 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
               ),
               label: '',
             ),
-            // ONGLET TRAJETS -> Pointe maintenant vers HistoriquePage
             const BottomNavigationBarItem(
               icon: Icon(Icons.description_outlined),
               activeIcon: Icon(Icons.description),
